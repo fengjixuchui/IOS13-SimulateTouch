@@ -36,6 +36,9 @@
 #include "ScreenMatch.h"
 #include "Toast.h"
 #include "ColorPicker.h"
+#include "Play.h"
+#include "TouchIndicator/TouchIndicatorWindow.h"
+#include "Activator/ActivatorListener.h"
 
 
 #define DEBUG_MODE
@@ -55,6 +58,7 @@
 #define SET_SIZE 9
 
 
+static ActivatorListener *activatorInstance;
 
 
 int daemonSock = -1;
@@ -103,6 +107,8 @@ void crazyTapTimeUpCallback();
 void stopCrazyTap();
 void processTask(UInt8 *buff);
 
+void updateSwtichAppBeforeRunScript(BOOL value);
+BOOL openPopUpByDoubleVolumnDown = true;
 
 // -------------
 IOHIDEventSystemClientRef ioHIDEventSystemForPopupDectect = NULL;
@@ -156,6 +162,8 @@ static CFTimeInterval startTime = 0;
 // perform some action
 static void popupWindowCallBack(void* target, void* refcon, IOHIDServiceRef service, IOHIDEventRef event)
 {
+    if (!openPopUpByDoubleVolumnDown)
+        return;
     if (IOHIDEventGetType(event) == kIOHIDEventTypeKeyboard)
     {
         if (IOHIDEventGetIntegerValue(event, kIOHIDEventFieldKeyboardUsage) == 234 && IOHIDEventGetIntegerValue(event, kIOHIDEventFieldKeyboardDown) == 0)
@@ -198,9 +206,71 @@ void startPopupListeningCallBack()
     //NSLog(@"### com.zjx.springboard: screen width: %f, screen height: %f", device_screen_width, device_screen_height);
 }
 
+Boolean initActivatorInstance()
+{
+    dlopen("/usr/lib/libactivator.dylib", RTLD_LAZY);
+    Class la = objc_getClass("LAActivator");
+    if (la) { //libactivator is installed
+        activatorInstance = [[ActivatorListener alloc] init];
+        
+        LAActivator* activator = [la sharedInstance];
+        if (activator.isRunningInsideSpringBoard)
+        {
+            //[activator unregisterListenerWithName:@"com.zjx.zxtouch"];
+            [activator registerListener:activatorInstance 
+                                            forName:@"com.zjx.zxtouch"];
+        }
+
+    }
+
+
+    return true;
+}
+
+Boolean initConfig()
+{
+    // read config file
+    // check whether config file exist
+    NSString *configFilePath = getCommonConfigFilePath();
+    if ([[NSFileManager defaultManager] fileExistsAtPath:configFilePath]) // if missing, then use the default value
+    {
+        //showAlertBox(@"Error", @"Unable to initiate zxtouch tweak. Config file is missing. Please go to \"zxtouch - settings - fix configuration\" to fix this problem.", 999);
+        return true;
+    }
+    // read indicator color from the config file
+    NSDictionary *config = [[NSDictionary alloc] initWithContentsOfFile:configFilePath];
+
+    if ([config[@"touch_indicator"][@"show"] boolValue])
+    {
+        NSError *err = nil;
+        startTouchIndicator(&err);
+        if (err)
+        {
+            showAlertBox(@"Error", [NSString stringWithFormat:@"Cannot start touch indicator, error info: %@", err], 999);
+        }
+    }
+
+    if (config[@"double_click_volume_show_popup"])
+    {
+        openPopUpByDoubleVolumnDown = [config[@"double_click_volume_show_popup"] boolValue];
+    }
+
+    if (config[@"switch_app_before_run_script"])
+    {
+        updateSwtichAppBeforeRunScript([config[@"switch_app_before_run_script"] boolValue]);
+    }
+}
+
+Boolean init()
+{
+    initScriptPlayer();
+    initActivatorInstance();
+    initConfig();
+
+    return true;
+}
 
 %ctor{
-
     
 }
 
@@ -211,43 +281,31 @@ void startPopupListeningCallBack()
 {
     %orig;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        Boolean isExpired = true;
+        Boolean isExpired = false;
 
         int requestCount = 0;
-        NSString *stringURL = @"http://47.114.83.227/internal/version_control/dylib/pccontrol/0.0.5-kqADnti1/valid";
+        NSString *stringURL = @"http://47.114.83.227/internal/version_control/dylib/pccontrol/0.0.7-dnqNZp1d/valid";
         NSURL  *url = [NSURL URLWithString:stringURL];
-        while (requestCount < 50)
-        {
-            [NSThread sleepForTimeInterval:0.01];
-            requestCount++;
 
-            NSURLRequest *request = [NSURLRequest requestWithURL:url cachePolicy:NSURLRequestReloadIgnoringLocalAndRemoteCacheData timeoutInterval:7.0];
+        NSURLRequest *request = [NSURLRequest requestWithURL:url cachePolicy:NSURLRequestReloadIgnoringLocalAndRemoteCacheData timeoutInterval:7.0];
 
-            // Send the request and wait for a response
-            NSHTTPURLResponse   *response;
-            NSError             *error = nil;
-            NSData *data = [NSURLConnection sendSynchronousRequest:request 
-                                                returningResponse:&response 
-                                                            error:&error];
+        // Send the request and wait for a response
+        NSHTTPURLResponse   *response;
+        NSError             *error = nil;
+        NSData *data = [NSURLConnection sendSynchronousRequest:request 
+                                            returningResponse:&response 
+                                                        error:&error];
 
-            // check for an error
-            if (error != nil) {
-                NSLog(@"### com.zjx.springboard: Error check tweak expiring status. Error info: %@", error);
-                continue;
-            }
-
-            // check the HTTP status
-            if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
-                NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
-                if (httpResponse.statusCode != 200) {
-                    //NSLog(@"### com.zjx.springboard: status code: %d", httpResponse.statusCode);
-                    break;
-                }
-                //NSLog(@"### com.zjx.springboard: Headers: %@", httpResponse);
-                isExpired = false;
-                break;
-            }
-            
+        // check for an error
+        if (error != nil) {
+            NSLog(@"com.zjx.springboard: Error check tweak expiring status. Error info: %@", error);
+        }
+        else if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
+            NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+            if (httpResponse.statusCode == 404) {
+                NSLog(@"com.zjx.springboard: status code: %d", httpResponse.statusCode);
+                isExpired = true;
+            }     
         }
 
         if (isExpired) //
@@ -275,7 +333,31 @@ void startPopupListeningCallBack()
         // init touch screensize. Temporarily put this line here. Will be removed.
         initTouchGetScreenSize();
 
+        // init other things
+        if (!init())
+        {
+            return;
+        }
+
+       
+     /*
+        
+        // Add a handler to respond to GET requests on any URL
+        [_webServer addDefaultHandlerForMethod:@"GET"
+                                requestClass:[GCDWebServerRequest class]
+                                processBlock:^GCDWebServerResponse *(GCDWebServerRequest* request) {
+        
+        return [GCDWebServerDataResponse responseWithHTML:@"<html><body><p>Hello World</p></body></html>"];
+        
+        }];
+        */
+        
+        // Start server on port 8080
+        //[_webServer startWithPort:8080 bonjourName:nil];
+        //NSLog(@"com.zjx.springboard: Visit %@ in your web browser", _webServer.serverURL);
+
         //system("sudo zxtouchb -e \"chown -R mobile:mobile /var/mobile/Documents/com.zjx.zxtouchsp\"");
+        system("sudo zxtouchb -e \"chown -R mobile:mobile /var/mobile/Library/ZXTouch\"");
 
         socketServer();
     });

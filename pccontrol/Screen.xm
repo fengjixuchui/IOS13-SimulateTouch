@@ -70,20 +70,57 @@ Get the size of the screen and set them.
     return [[UIScreen mainScreen] scale];
 }
 
++ (CGRect)getBounds
+{
+    return [UIScreen mainScreen].bounds;
+}
+
+
 OBJC_EXTERN UIImage *_UICreateScreenUIImage(void);
 + (NSString*)screenShot
 {
-     UIImage *screenImage = _UICreateScreenUIImage();
-     // For debugging purpose
+    UIImage *screenImage = _UICreateScreenUIImage();
     // Create path.
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true);
-    NSString *filePath = [[paths objectAtIndex:0] stringByAppendingPathComponent:@"screenshot.jpg"];
+    NSString *filePath = [getDocumentRoot() stringByAppendingPathComponent:@"screenshot.png"];
 
     // Save image.
-    [UIImageJPEGRepresentation(screenImage, 0.7) writeToFile:filePath atomically:true];
+    [UIImagePNGRepresentation(screenImage) writeToFile:filePath atomically:NO];
+    return filePath;
+}
 
-    NSLog(@"com.zjx.springboard: screenshot path: %@", filePath);
++ (UIImage*)screenShotUIImage
+{
+    return _UICreateScreenUIImage();
+}
 
++ (NSString*)screenShotAlwaysUp
+{
+     UIImage *screenImage = _UICreateScreenUIImage();
+    int orientation = [self getScreenOrientation];
+
+    UIImageOrientation after = UIImageOrientationUp;
+    if (orientation == 4)
+    {
+        after = UIImageOrientationRight;
+    }
+    else if (orientation == 3)
+    {
+        after = UIImageOrientationLeft;
+    }
+    else if (orientation == 2)
+    {
+        after = UIImageOrientationDown;
+    }
+
+    UIImage *result = [UIImage imageWithCGImage:[screenImage CGImage]
+              scale:[screenImage scale]
+              orientation: after];
+
+    // Create path.
+    NSString *filePath = [getDocumentRoot() stringByAppendingPathComponent:@"screenshot.png"];
+
+    // Save image.
+    [UIImagePNGRepresentation(result) writeToFile:filePath atomically:NO];
     return filePath;
 }
 @end

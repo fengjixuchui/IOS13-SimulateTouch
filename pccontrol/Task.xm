@@ -10,8 +10,11 @@
 #include "ColorPicker.h"
 #include "UIKeyboard.h"
 #include "DeviceInfo.h"
+#include "TouchIndicator/TouchIndicatorWindow.h"
 #import <mach/mach.h>
 #include <Foundation/NSDistributedNotificationCenter.h>
+#include <TextRecognization/TextRecognizer.h>
+#include "UpdateCache.h"
 
 extern CFRunLoopRef recordRunLoop;
 
@@ -33,7 +36,7 @@ Process Task
 */
 void processTask(UInt8 *buff, CFWriteStreamRef writeStreamRef)
 {
-    NSLog(@"### com.zjx.springboard: task type: %d. Data: %s", getTaskType(buff), buff);
+    //NSLog(@"### com.zjx.springboard: task type: %d. Data: %s", getTaskType(buff), buff);
 
     UInt8 *eventData = buff + 0x2;
     int taskType = getTaskType(buff);
@@ -114,8 +117,6 @@ void processTask(UInt8 *buff, CFWriteStreamRef writeStreamRef)
             {
                 notifyClient((UInt8*)"0\r\n", writeStreamRef);
             }
-            recordRunLoop = CFRunLoopGetCurrent();
-            CFRunLoopRun();
         });
     }
     else if (taskType == TASK_TOUCH_RECORDING_STOP)
@@ -138,7 +139,18 @@ void processTask(UInt8 *buff, CFWriteStreamRef writeStreamRef)
     }
     else if (taskType == TASK_PLAY_SCRIPT_FORCE_STOP)
     {
-        playForceStop();
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSError *err = nil;
+            stopScriptPlaying(&err);
+            if (err)
+            {
+                notifyClient((UInt8*)[[err localizedDescription] UTF8String], writeStreamRef);
+            }
+            else
+            {
+                notifyClient((UInt8*)"0\r\n", writeStreamRef);
+            }
+        });
     }
     else if (taskType == TASK_TEMPLATE_MATCH)
     {
@@ -183,14 +195,14 @@ void processTask(UInt8 *buff, CFWriteStreamRef writeStreamRef)
     else if (taskType == TASK_TEXT_INPUT)
     {
         NSError *err = nil;
-        inputTextFromRawData(eventData,  &err);
+        NSString *result = inputTextFromRawData(eventData,  &err);
         if (err)
         {
             notifyClient((UInt8*)[[err localizedDescription] UTF8String], writeStreamRef);
         }
         else
         {
-            notifyClient((UInt8*)"0;;Successfully notify the appdelegate tweak. But not sure whether it works...\r\n", writeStreamRef);
+            notifyClient((UInt8*)[[NSString stringWithFormat:@"0;;%@\r\n", result] UTF8String], writeStreamRef);
         }
     }
     else if (taskType == TASK_GET_DEVICE_INFO)
@@ -206,8 +218,69 @@ void processTask(UInt8 *buff, CFWriteStreamRef writeStreamRef)
             notifyClient((UInt8*)[[NSString stringWithFormat:@"0;;%@\r\n", deviceInfo] UTF8String], writeStreamRef);
         }
     }
+    else if (taskType == TASK_TOUCH_INDICATOR)
+    {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+
+            NSError *err = nil;
+            handleTouchIndicatorTaskWithRawData(eventData, &err);
+            if (err)
+            {
+                notifyClient((UInt8*)[[err localizedDescription] UTF8String], writeStreamRef);
+            }
+            else
+            {
+                notifyClient((UInt8*)"0\r\n", writeStreamRef);
+            }
+        });
+    }
+    else if (taskType == TASK_TEXT_RECOGNIZER)
+    {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSError *err = nil;
+            NSString *text = performTextRecognizerTextFromRawData(eventData,  &err);
+            if (err)
+            {
+                notifyClient((UInt8*)[[err localizedDescription] UTF8String], writeStreamRef);
+            }
+            else
+            {
+                notifyClient((UInt8*)[[NSString stringWithFormat:@"0;;%@\r\n", text] UTF8String], writeStreamRef);
+            }
+        });
+    }
+    else if (taskType == TASK_COLOR_SEARCHER)
+    {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSError *err = nil;
+            NSString *returndata = searchRGBFromRawData(eventData,  &err);
+            if (err)
+            {
+                notifyClient((UInt8*)[[err localizedDescription] UTF8String], writeStreamRef);
+            }
+            else
+            {
+                notifyClient((UInt8*)[[NSString stringWithFormat:@"0;;%@\r\n", returndata] UTF8String], writeStreamRef);
+            }
+        });
+    }
+    else if (taskType == TASK_UPDATE_CACHE)
+    {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSError *err = nil;
+            updateCacheFromRawData(eventData,  &err);
+            if (err)
+            {
+                notifyClient((UInt8*)[[err localizedDescription] UTF8String], writeStreamRef);
+            }
+            else
+            {
+                notifyClient((UInt8*)[@"0\r\n" UTF8String], writeStreamRef);
+            }
+        });
+    }
     else if (taskType == TASK_TEST)
     {
-        //notifyClient((UInt8*)"tttttttttttttttttttttttttttttttt", writeStreamRef);
+
     }
 }

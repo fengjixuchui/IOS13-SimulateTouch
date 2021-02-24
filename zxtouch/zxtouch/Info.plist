@@ -15,11 +15,35 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>GetScreenOrientationIntent</string>
+		<string>GetScreenSizeIntent</string>
+		<string>ImageMatchingIntent</string>
+		<string>InsertTextIntent</string>
+		<string>Intent1Intent</string>
+		<string>MoveCursorIntent</string>
+		<string>OCRIntent</string>
+		<string>PasteFromClipBoardIntent</string>
+		<string>PerformTouchIntent</string>
+		<string>PickColorIntent</string>
+		<string>PlayScriptIntent</string>
+		<string>RunShellCommandIntent</string>
+		<string>SearchColorIntent</string>
+		<string>ShowAlertBoxIntent</string>
+		<string>ShowToastIntent</string>
+		<string>StartTouchRecordingIntent</string>
+		<string>StopScriptPlayingIntent</string>
+		<string>StopTouchRecordingIntent</string>
+		<string>SwitchAppIntent</string>
+		<string>UsleepIntent</string>
+		<string>WaitIntent</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -62,5 +86,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 </dict>
 </plist>

@@ -9,8 +9,10 @@
 #import "ScriptListTableCell.h"
 #import "ScriptEditorViewController.h"
 #import "LogViewController.h"
-#import "ScriptAdder/AdderPopOverViewController.h"
+#import "ScriptManagement/AdderPopOverViewController.h"
+#import "ImageViewerViewController.h"
 #include "Config.h"
+#import "ScriptManagement/MoreOptionsPopOverTableViewController.h"
 
 @interface ScriptListViewController ()
 
@@ -24,10 +26,15 @@
 }
 
 - (void) setFolder:(NSString*)folder {
-    currentFolder = folder;
+    currentFolder = [folder stringByStandardizingPath];
+}
+
+- (UIModalPresentationStyle) adaptivePresentationStyleForPresentationController: (UIPresentationController * ) controller {
+    return UIModalPresentationNone;
 }
 
 - (IBAction)logButtonClick:(id)sender {
+    
 
     LogViewController *logEditorViewController = [[LogViewController alloc] initWithNibName: @"LogViewController" bundle: nil];
     
@@ -35,6 +42,8 @@
     //[logEditorViewController setFile:RUNTIME_OUTPUT_PATH];
 
     [self presentViewController:logEditorViewController animated:YES completion:nil];
+     
+
 }
 
 - (IBAction)addButtonClick:(id)sender {
@@ -45,6 +54,7 @@
     UIPopoverPresentationController *popPC = contentVC.popoverPresentationController;
     popPC.permittedArrowDirections = UIPopoverArrowDirectionAny;
     popPC.barButtonItem = sender;
+    popPC.delegate = contentVC;
     [self presentViewController:contentVC animated:YES completion:nil];
 }
 
@@ -76,6 +86,10 @@
     BOOL isDir = NO;
     for (NSString *fileName in files)
     {
+        if ([[fileName substringWithRange:NSMakeRange(0, 1)] isEqualToString:@"."])
+        {
+            continue;
+        }
         NSString *filePath = [NSString stringWithFormat:@"%@/%@", path, fileName];
         if (![[fileName pathExtension] isEqualToString:@"bdl"] && [[NSFileManager defaultManager] fileExistsAtPath:filePath isDirectory:&isDir] && isDir)
         {
@@ -141,6 +155,22 @@
 }
 
 
+- (IBAction)moreButtonClicked:(id)sender {
+    CGPoint buttonPosition = [sender convertPoint:CGPointZero toView:self._scriptListTableView];
+    NSIndexPath *indexPath = [self._scriptListTableView indexPathForRowAtPoint:buttonPosition];
+    
+    MoreOptionsPopOverTableViewController *contentVC = [[MoreOptionsPopOverTableViewController alloc] initWithFolderPath:scriptList[indexPath.row]];
+    
+    contentVC.modalPresentationStyle = UIModalPresentationPopover;
+    [contentVC setUpperLevelViewController:self];
+    UIPopoverPresentationController *popPC = contentVC.popoverPresentationController;
+    popPC.permittedArrowDirections = UIPopoverArrowDirectionAny;
+    //popPC.barButtonItem = sender;
+    popPC.sourceView = sender;
+    popPC.delegate = contentVC;
+    [self presentViewController:contentVC animated:YES completion:nil];
+}
+
 - (void)refreshTable {
     scriptList = [self updateScriptList];
     [__scriptListTableView reloadData];
@@ -180,6 +210,7 @@
     NSString *path = scriptList[indexPath.row];
     [[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDir];
     
+    
     if (isDir)
     {
         ScriptListViewController *scriptBundleContentViewController = [self.storyboard instantiateViewControllerWithIdentifier:@"scriptBundleContent"];
@@ -190,6 +221,27 @@
         scriptBundleContentViewController.title = [path lastPathComponent];
 
         [self.navigationController pushViewController:scriptBundleContentViewController animated:YES];
+        return;
+    }
+    
+    NSArray *possibleImageExtension = @[@"jpg", @"png", @"JPG", @"PNG", @"jpeg", @"JPEG", @"GIF", @"gif"];
+
+    BOOL isImage = false;
+    for (NSString* i in possibleImageExtension)
+    {
+        if ([[path pathExtension] isEqualToString:i])
+        {
+            isImage = true;
+        }
+    }
+    
+    if (isImage)
+    {
+        ImageViewerViewController *imageViewerController = [self.storyboard instantiateViewControllerWithIdentifier:@"imageViewer"];
+        
+        imageViewerController.title = [path lastPathComponent];
+        imageViewerController.path = path;
+        [self.navigationController pushViewController:imageViewerController animated:YES];
     }
     else
     {
@@ -236,8 +288,8 @@
         UIAlertAction* cancel = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleDefault
            handler:nil];
         
-        [alert addAction:ok];
         [alert addAction:cancel];
+        [alert addAction:ok];
         [self presentViewController:alert animated:YES completion:nil];
     }
 }

@@ -8,6 +8,17 @@
 #import <mach-o/dyld.h>
 #include <substrate.h>
 
+#define INSERT_TEXT 1
+#define VIRTUAL_KEYBOARD 2
+#define MOVE_CURSOR 3
+#define DELETE_CHARACTER 4
+#define PASTE_FROM_CLIPBOARD 5
+
+#define TEST 99
+
+#define VIRTUAL_KEYBOARD_HIDE 1
+#define VIRTUAL_KEYBOARD_SHOW 2
+
 
 @interface UIKeyboardImpl : UIView
 	+ (id)sharedInstance;
@@ -23,25 +34,44 @@
 	- (void)clearSelection;
     - (void)deleteBackward;
  	- (void)setSelectionWithPoint:(struct CGPoint)arg1;
+    - (id)markedText;
+    - (void)unmarkText;
+    - (void)clearSelection;
+    - (void)setInputPoint:(struct CGPoint)arg1;
+    - (_Bool)hasMarkedText;
+
  	@property (readonly, assign, nonatomic) UIResponder <UITextInput> *inputDelegate;
 @end
 
 
 %hook UIKeyboardImpl
 
-	- (id)initWithFrame:(CGRect)arg1 {
-
-        //CFNotificationCenterRemoveObserver([NSDistributedNotificationCenter defaultCenter], NULL, CFSTR("com.zjx.zxtouch.textinput"), NULL);
-
-		
-		// 处理Mac不同的进程之间的通知
+    - (id)initWithFrame:(CGRect)arg1 forCustomInputView:(UIView*)view
+    {
 		NSDistributedNotificationCenter *center = [NSDistributedNotificationCenter defaultCenter];
 		[center addObserver: self
 					selector: @selector(handleKeyboardNotification:)
 					name: @"com.zjx.zxtouch.keyboardcontrol"
 					object: nil];
 
-		NSLog(@"com.zjx.appdelegate: UIKeyboardImpl instance allocated");
+		//NSLog(@"com.zjx.appdelegate: UIKeyboardImpl instance allocated");
+		return %orig;
+    }
+
+	- (id)initWithFrame:(CGRect)arg1 {
+		NSDistributedNotificationCenter *center = [NSDistributedNotificationCenter defaultCenter];
+		[center addObserver: self
+					selector: @selector(handleKeyboardNotification:)
+					name: @"com.zjx.zxtouch.keyboardcontrol"
+					object: nil];
+
+		//NSLog(@"com.zjx.appdelegate: UIKeyboardImpl instance allocated");
+		return %orig;
+	}
+
+	- (void)dealloc {
+        [[NSDistributedNotificationCenter defaultCenter] removeObserver:self name:@"com.zjx.zxtouch.textinput" object:nil];
+		//NSLog(@"com.zjx.appdelegate: UIKeyboardImpl instance deallocated");
 		return %orig;
 	}
 
@@ -90,6 +120,11 @@
                 [self deleteBackward];
             }
             NSLog(@"com.zjx.appdelegate: delete characters by amount: %d", numOfCharacterToDel);
+        }
+        else if (taskId == PASTE_FROM_CLIPBOARD)
+        {
+            UIPasteboard *pb = [UIPasteboard generalPasteboard];
+            [self insertText:[pb string]];
         }
 	}
 

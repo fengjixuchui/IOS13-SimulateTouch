@@ -33,7 +33,7 @@ void showToastFromRawData(UInt8 *eventData, NSError **error)
         *error = [NSError errorWithDomain:@"com.zjx.zxtouchsp" code:999 userInfo:@{NSLocalizedDescriptionKey:@"-1;;Unknown type. The type ranges from 0-3. Please refer to the documentation on Github.\r\n"}];
         return;
     }
-    if (duration <= 0)
+    if (duration <= 0 && type != 0)
     {
         *error = [NSError errorWithDomain:@"com.zjx.zxtouchsp" code:999 userInfo:@{NSLocalizedDescriptionKey:@"-1;;Duration should be a positive float number.\r\n"}];
         return;
@@ -55,11 +55,13 @@ void showToastFromRawData(UInt8 *eventData, NSError **error)
 
 + (void) hideToast
 {
-    if (_window != NULL)
-    {
-        _window.hidden = YES;
-        _window = nil;
-    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (_window != NULL)
+        {
+            _window.hidden = YES;
+            _window = nil;
+        }
+    });
 }
 
 + (void) showToastWithContent:(NSString*)content type:(int)type duration:(float)duration position:(int)position fontSize:(int)afontSize // positon: 0 top 1 bottom 2 left(not supported) 3 right (ns)
@@ -102,16 +104,27 @@ void showToastFromRawData(UInt8 *eventData, NSError **error)
         //windowHeight = (int)((screenHeight/scale)/4);
 
         int windowLeftTopCornerX = (int)((screenWidth/scale)/2 - windowWidth/2);
-        int windowLeftTopCornerY = 20;
+        int windowLeftTopCornerY = 30;
+
         if (position == 0)
         {
-            windowLeftTopCornerY = 20;
+            windowLeftTopCornerY = 30;
         }
         else if (position == 1)
         {
             windowLeftTopCornerY = (int)((screenHeight - contentSize.height - 50)/scale);
-            NSLog(@"com.zjx.springboard: windowLeftTopCornerY: %d", windowLeftTopCornerY);
         }
+
+        if (@available(iOS 11.0, *)) {
+            UIWindow *window = UIApplication.sharedApplication.windows.firstObject;
+            CGFloat topPadding = window.safeAreaInsets.top;
+            CGFloat bottomPadding = window.safeAreaInsets.bottom;
+
+            windowLeftTopCornerY = bottomPadding + windowLeftTopCornerY;
+        }
+
+
+
         
         _window = [[UIWindow alloc] initWithFrame:CGRectMake(windowLeftTopCornerX, windowLeftTopCornerY, windowWidth, windowHeight)];
         currentWindow = _window;
@@ -121,6 +134,7 @@ void showToastFromRawData(UInt8 *eventData, NSError **error)
         _window.layer.borderColor = [UIColor clearColor].CGColor;
         _window.layer.borderWidth = 2.0f;
         _window.layer.cornerRadius = 10;
+        [_window setUserInteractionEnabled:NO];
 
         UILabel *contentLabel = [[UILabel alloc]initWithFrame:CGRectMake(windowWidth/2 - contentSize.width/2, 0, contentSize.width, contentSize.height)];
         contentLabel.font = font;
